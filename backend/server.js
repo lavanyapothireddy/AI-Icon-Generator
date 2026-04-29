@@ -83,7 +83,7 @@ app.post("/api/generate-variations", async (req, res) => {
       groq.chat.completions.create({
         model: MODEL,
         max_tokens: 1500,
-        temperature: 0.8,
+        temperature: 0.3,
         messages: [
           {
             role: "system",
