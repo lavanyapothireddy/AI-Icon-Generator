@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Icon Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="noise"></div>
+
+  <header>
+    <div class="logo">
+      <span class="logo-icon">◈</span>
+      <span>IconAI</span>
+    </div>
+    <nav>
+      <a href="#generator">Generator</a>
+      <a href="#variations">Variations</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-badge">✦ Powered by Claude AI</div>
+      <h1>Generate <em>perfect</em><br />icons instantly</h1>
+      <p class="hero-sub">Describe any icon in plain English. Get production-ready SVG in seconds.</p>
+    </section>
+
+    <!-- Generator -->
+    <section class="generator" id="generator">
+      <div class="card">
+        <div class="form-group">
+          <label>Describe your icon</label>
+          <div class="input-wrap">
+            <input type="text" id="prompt" placeholder="e.g. rocket launching with fire trail" maxlength="200" />
+            <span class="char-count" id="charCount">0/200</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Style</label>
+            <select id="style">
+              <option value="modern flat">Modern Flat</option>
+              <option value="outlined">Outlined</option>
+              <option value="filled bold">Filled Bold</option>
+              <option value="minimal line">Minimal Line</option>
+              <option value="gradient">Gradient</option>
+              <option value="3D isometric">3D Isometric</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Primary Color</label>
+            <div class="color-row">
+              <input type="color" id="color" value="#6366f1" />
+              <div class="color-presets">
+                <button class="preset" style="background:#6366f1" data-color="#6366f1"></button>
+                <button class="preset" style="background:#ec4899" data-color="#ec4899"></button>
+                <button class="preset" style="background:#10b981" data-color="#10b981"></button>
+                <button class="preset" style="background:#f59e0b" data-color="#f59e0b"></button>
+                <button class="preset" style="background:#3b82f6" data-color="#3b82f6"></button>
+                <button class="preset" style="background:#ef4444" data-color="#ef4444"></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn-generate" id="generateBtn">
+          <span class="btn-icon">✦</span>
+          <span id="btnText">Generate Icon</span>
+        </button>
+      </div>
+
+      <!-- Result -->
+      <div class="result-area" id="resultArea" style="display:none">
+        <div class="result-card">
+          <div class="icon-display" id="iconDisplay"></div>
+          <div class="icon-actions">
+            <button class="btn-action" id="downloadSvg">↓ SVG</button>
+            <button class="btn-action" id="downloadPng">↓ PNG</button>
+            <button class="btn-action" id="copyCode">{ } Copy Code</button>
+          </div>
+          <div class="icon-sizes">
+            <div class="size-preview" data-size="16">
+              <div class="preview-icon" id="prev16"></div>
+              <span>16px</span>
+            </div>
+            <div class="size-preview" data-size="32">
+              <div class="preview-icon" id="prev32"></div>
+              <span>32px</span>
+            </div>
+            <div class="size-preview" data-size="64">
+              <div class="preview-icon" id="prev64"></div>
+              <span>64px</span>
+            </div>
+            <div class="size-preview" data-size="128">
+              <div class="preview-icon" id="prev128"></div>
+              <span>128px</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Variations -->
+    <section class="variations-section" id="variations">
+      <h2>Generate <em>Variations</em></h2>
+      <p>Get 4 different styles of the same icon concept</p>
+      <button class="btn-variations" id="variationsBtn" disabled>
+        ◈ Generate 4 Variations
+      </button>
+      <div class="variations-grid" id="variationsGrid"></div>
+    </section>
+  </main>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <p id="loadingText">Generating your icon...</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
