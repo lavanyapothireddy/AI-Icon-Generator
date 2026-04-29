@@ -90,12 +90,21 @@ app.post("/api/generate-variations", async (req, res) => {
             content: `You are an expert SVG icon designer. Output ONLY raw SVG code. No markdown, no explanations, no backticks. Start directly with <svg and end with </svg>.`,
           },
           {
-            role: "user",
-            content: `Create a ${styles[i]} style SVG icon for: "${prompt}"
-Primary color: ${colors[i]}
-viewBox="0 0 100 100" width="100" height="100"
-Pure SVG shapes only. Output raw SVG only.`,
-          },
+  role: "user",
+  content: `Create a professional SVG icon for: "${prompt}"
+
+Style: ${style || "modern flat"}
+Primary color: ${color || "#6366f1"}
+
+STRICT SVG RULES:
+- viewBox="0 0 100 100" width="100" height="100"
+- Use ONLY these SVG elements: <circle>, <path>, <rect>, <ellipse>, <line>, <arc>, <polyline>
+- For a wifi icon: draw 3-4 concentric arc paths centered at bottom with increasing radius, plus a small circle dot at bottom center
+- Colors: use primary color with opacity variants (opacity="0.4", opacity="0.7", opacity="1") for depth
+- NO text, NO foreignObject, NO image tags, NO clipPath complexity
+- Shapes must be geometrically accurate — arcs for wifi, actual star polygon for stars, etc.
+- Output ONLY raw SVG. Start with <svg, end with </svg>. Zero other characters.`,
+},
         ],
       })
     );
