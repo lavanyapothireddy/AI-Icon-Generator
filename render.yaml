@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: ai-icon-generator
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: PORT
+        value: 3000
