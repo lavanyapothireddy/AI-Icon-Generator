@@ -12,54 +12,59 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../frontend")));
 
-// ── Core SVG generation prompt ────────────────────────────────────────────────
-function buildPrompt(prompt, color, style) {
-  return `You are an expert SVG icon coder. Your job is to write clean, accurate SVG code.
-
-ICON REQUEST: "${prompt}"
-COLOR: ${color}
-STYLE: ${style}
-
-MANDATORY SVG RULES:
-1. Output ONLY the raw SVG element. No markdown, no explanation, no code fences.
-2. Must start exactly with: <svg viewBox="0 0 100 100" width="100" height="100" xmlns="http://www.w3.org/2000/svg">
-3. Must end with: </svg>
-4. Use ONLY these elements: <circle> <rect> <ellipse> <polygon> <polyline> <path> <line> <g>
-5. NO text, NO image, NO foreignObject, NO defs with complex filters
-6. Primary fill color: ${color} — use it on main shapes
-7. Add depth: use opacity="0.3" or opacity="0.6" on secondary shapes
-8. White highlights: use fill="white" opacity="0.2" for shine effects
-
-DRAWING INSTRUCTIONS BY CONCEPT:
-- Animals: use overlapping ellipses/circles for body parts, small circles for eyes
-- Faces/Emoji: large circle base, smaller circles for eyes, arc path for mouth
-- Buildings: rectangles for walls, polygon for roof, small rects for windows/doors  
-- Vehicles: rounded rect for body, circles for wheels, rect for windows
-- Nature (tree): triangle/polygon for leaves, rect for trunk
-- Nature (sun): circle center + lines radiating outward using <line> elements
-- Nature (moon): two overlapping circles (one filled bg color) to create crescent
-- Food: use circles, rounded rects, and layered shapes
-- Tech (phone): tall rounded rect, smaller rect for screen
-- Tech (laptop): rect for screen, wider rect for keyboard base
-- Sports (ball): circle with curved path lines on it
-- Abstract/geometric: use polygon, circles, and rects creatively
-- Arrows: polygon for arrowhead + rect for shaft
-- Lock: rounded rect body + arc path for shackle
-- Eye: large ellipse + circle pupil + smaller circle highlight
-- Letter/Mail: rect with V-shape polyline on top
-- Map pin/location: circle top + triangle bottom forming teardrop path
-- Chart/Graph: vertical rects of different heights
-- Clock: circle + two line hands
-- Diamond: polygon with 4-5 points
-
-IMPORTANT: Draw the concept accurately. A "cat" should look like a cat (oval body, triangle ears, whisker lines). A "pizza" should look like a pizza (circle, triangle slices, dots for toppings). Be creative and accurate.
-
-Now output the SVG:`;
+// ── Search Iconify for best matching icon ─────────────────────────────────────
+async function searchIconify(query, limit = 8) {
+  const url = `https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=${limit}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  return data.icons || []; // e.g. ["mdi:pizza", "fluent:pizza-20-filled", ...]
 }
 
-function extractSVG(text) {
-  const match = text.match(/<svg[\s\S]*?<\/svg>/i);
-  return match ? match[0] : null;
+// ── Fetch SVG from Iconify ────────────────────────────────────────────────────
+async function fetchIconSVG(iconId) {
+  // iconId format: "prefix:name" e.g. "mdi:pizza"
+  const [prefix, name] = iconId.split(":");
+  const url = `https://api.iconify.design/${prefix}/${name}.svg`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch icon: ${iconId}`);
+  return await res.text();
+}
+
+// ── Colorize SVG: inject color into currentColor icons ────────────────────────
+function colorizeSVG(svg, color) {
+  return svg
+    .replace(/width="[^"]*"/, 'width="100"')
+    .replace(/height="[^"]*"/, 'height="100"')
+    .replace(/currentColor/g, color)
+    .replace(/<svg /, `<svg style="color:${color}" `);
+}
+
+// ── Use Groq to pick the best icon from search results ───────────────────────
+async function pickBestIcon(prompt, icons) {
+  if (icons.length === 0) return null;
+  if (icons.length === 1) return icons[0];
+
+  const completion = await groq.chat.completions.create({
+    model: MODEL,
+    max_tokens: 30,
+    temperature: 0.1,
+    messages: [
+      {
+        role: "system",
+        content: `You pick the best icon ID from a list for a given description. Reply with ONLY the icon ID, nothing else. No explanation.`,
+      },
+      {
+        role: "user",
+        content: `Description: "${prompt}"
+Available icons: ${icons.join(", ")}
+Pick the single best matching icon ID:`,
+      },
+    ],
+  });
+
+  const picked = completion.choices[0]?.message?.content?.trim();
+  // Validate it's actually in our list
+  return icons.find((i) => i === picked) || icons[0];
 }
 
 // ── Generate single icon ──────────────────────────────────────────────────────
@@ -68,81 +73,71 @@ app.post("/api/generate-icon", async (req, res) => {
   if (!prompt) return res.status(400).json({ error: "Prompt is required" });
 
   try {
-    const completion = await groq.chat.completions.create({
-      model: MODEL,
-      max_tokens: 2000,
-      temperature: 0.4,
-      messages: [
-        {
-          role: "system",
-          content: `You are an SVG icon generator. You output ONLY raw SVG code. You never write explanations, markdown, or anything outside the SVG tags. Every response is a single valid SVG element.`,
-        },
-        {
-          role: "user",
-          content: buildPrompt(prompt, color || "#6366f1", style || "modern flat"),
-        },
-      ],
-    });
+    // 1. Search Iconify
+    const icons = await searchIconify(prompt, 10);
 
-    const raw = completion.choices[0]?.message?.content?.trim() || "";
-    const svg = extractSVG(raw);
-
-    if (!svg) {
-      console.error("No SVG found in output:", raw);
-      return res.status(500).json({ error: "Model did not return valid SVG. Try rephrasing your prompt." });
+    if (icons.length === 0) {
+      return res.status(404).json({ error: `No icon found for "${prompt}". Try a simpler term like "pizza", "cat", "car".` });
     }
 
-    res.json({ svg, prompt, style, color });
+    // 2. Groq picks best match
+    const bestIcon = await pickBestIcon(prompt, icons);
+
+    // 3. Fetch SVG
+    let svg = await fetchIconSVG(bestIcon);
+
+    // 4. Apply color
+    svg = colorizeSVG(svg, color || "#6366f1");
+
+    res.json({ svg, prompt, style, color, iconId: bestIcon });
   } catch (err) {
-    console.error("Groq error:", err);
-    res.status(500).json({ error: "Generation failed", detail: err.message });
+    console.error("Error:", err);
+    res.status(500).json({ error: "Failed to generate icon", detail: err.message });
   }
 });
 
-// ── Generate 4 variations ─────────────────────────────────────────────────────
+// ── Generate 4 variations (same icon, 4 colors) ───────────────────────────────
 app.post("/api/generate-variations", async (req, res) => {
-  const { prompt, count = 4 } = req.body;
+  const { prompt } = req.body;
   if (!prompt) return res.status(400).json({ error: "Prompt is required" });
 
-  const variations = [
-    { style: "modern flat",   color: "#6366f1" },
-    { style: "outlined",      color: "#ec4899" },
-    { style: "filled bold",   color: "#10b981" },
-    { style: "minimal line",  color: "#f59e0b" },
-  ].slice(0, count);
+  const variationColors = [
+    { color: "#6366f1", style: "Modern Flat" },
+    { color: "#ec4899", style: "Outlined" },
+    { color: "#10b981", style: "Filled Bold" },
+    { color: "#f59e0b", style: "Minimal Line" },
+  ];
 
   try {
-    const promises = variations.map(({ style, color }) =>
-      groq.chat.completions.create({
-        model: MODEL,
-        max_tokens: 2000,
-        temperature: 0.5,
-        messages: [
-          {
-            role: "system",
-            content: `You are an SVG icon generator. Output ONLY raw SVG code. No markdown, no explanation. Start with <svg and end with </svg>.`,
-          },
-          {
-            role: "user",
-            content: buildPrompt(prompt, color, style),
-          },
-        ],
-      })
+    // Search once, reuse for all variations
+    const icons = await searchIconify(prompt, 10);
+    if (icons.length === 0) {
+      return res.status(404).json({ error: `No icon found for "${prompt}".` });
+    }
+
+    // Pick 4 different icons from results for variety, or reuse best
+    const bestIcon = await pickBestIcon(prompt, icons);
+
+    // For variations, try to get different icon styles from results
+    const selectedIcons = [
+      icons[0] || bestIcon,
+      icons[1] || bestIcon,
+      icons[2] || bestIcon,
+      icons[3] || bestIcon,
+    ];
+
+    const svgs = await Promise.all(
+      selectedIcons.map((iconId) => fetchIconSVG(iconId).catch(() => fetchIconSVG(bestIcon)))
     );
 
-    const results = await Promise.all(promises);
+    const variations = svgs.map((svg, i) => ({
+      svg: colorizeSVG(svg, variationColors[i].color),
+      style: variationColors[i].style,
+      color: variationColors[i].color,
+      iconId: selectedIcons[i],
+    }));
 
-    const output = results.map((r, i) => {
-      const raw = r.choices[0]?.message?.content?.trim() || "";
-      const svg = extractSVG(raw);
-      return {
-        svg: svg || `<svg viewBox="0 0 100 100" width="100" height="100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="35" fill="${variations[i].color}"/></svg>`,
-        style: variations[i].style,
-        color: variations[i].color,
-      };
-    });
-
-    res.json({ variations: output });
+    res.json({ variations });
   } catch (err) {
     console.error("Variation error:", err);
     res.status(500).json({ error: "Failed to generate variations", detail: err.message });
@@ -150,7 +145,7 @@ app.post("/api/generate-variations", async (req, res) => {
 });
 
 // ── Health ────────────────────────────────────────────────────────────────────
-app.get("/health", (req, res) => res.json({ status: "ok", model: MODEL }));
+app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../frontend/index.html"));
